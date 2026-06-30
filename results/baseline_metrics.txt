@@ -1,0 +1,18 @@
+BASELINE EfficientNet-B0 on the clean HAM10000 test set
+test photos: 1502
+overall accuracy:   0.762
+balanced accuracy:  0.745   (the fair score)
+
+              precision    recall  f1-score   support
+
+          nv      0.940     0.813     0.872      1004
+         mel      0.423     0.557     0.481       167
+         bkl      0.574     0.647     0.608       167
+         bcc      0.634     0.732     0.680        71
+       akiec      0.488     0.808     0.609        52
+        vasc      0.607     0.810     0.694        21
+          df      0.567     0.850     0.680        20
+
+    accuracy                          0.762      1502
+   macro avg      0.605     0.745     0.660      1502
+weighted avg      0.802     0.762     0.776      1502
