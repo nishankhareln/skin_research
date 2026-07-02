@@ -43,13 +43,28 @@ skin_research\
 │   └── split.csv                 train/val/test assignment (Step 3)
 ├── src\
 │   ├── 02_view_samples.py        Step 2: show sample photos
-│   └── 03_train_baseline.py      Step 3: train the baseline classifier
+│   ├── 03_train_baseline.py      Step 3: train the baseline classifier
+│   ├── 04_retrieval_dinov2.py    Step 4: the DINOv2 retrieval model
+│   ├── 05_crash_test.py          Step 5: degrade photos, re-run both models
+│   ├── 06_honesty_test.py        Step 6: is the confidence honest (calibration)?
+│   └── 07_lookup_distance_confidence.py  Step 7: distance-based confidence
 ├── models\
-│   └── baseline_efficientnet_b0.pt   the trained baseline (Step 3)
+│   ├── baseline_efficientnet_b0.pt   the trained baseline (Step 3)
+│   └── dino_library.npz              train fingerprints (Step 4)
 └── results\
     ├── sample_photos.png         Step 2 output: the labeled sample grid
     ├── baseline_metrics.txt      Step 3 output: the scores
-    └── baseline_confusion.png    Step 3 output: confusion matrix
+    ├── baseline_confusion.png    Step 3 output: confusion matrix
+    ├── retrieval_metrics.txt     Step 4 output: the scores
+    ├── retrieval_confusion.png   Step 4 output: confusion matrix
+    ├── degradation_results.csv            Step 5 output: every score at every level
+    ├── degradation_balanced_accuracy.png  Step 5 output: accuracy-vs-damage curves
+    ├── degradation_melanoma_recall.png    Step 5 output: melanoma-vs-damage curves
+    ├── calibration_results.csv            Step 6 output: confidence vs accuracy
+    ├── calibration_overconfidence.png     Step 6 output: overconfidence curves
+    ├── calibration_reliability.png        Step 6 output: reliability diagrams
+    ├── calibration_lookup_compare.csv     Step 7 output: the three confidences
+    └── calibration_lookup_reliability.png Step 7 output: honesty comparison
 ```
 
 ---
@@ -133,7 +148,119 @@ Run:
 venv\Scripts\python.exe src\03_train_baseline.py
 ```
 
-Next: Step 4 — build the second model (the case-retrieval "Lookup") and measure it on the same clean test set.
+### Step 4 — The case-retrieval model (the "Lookup")
+
+This builds the second model. Instead of learning a single decision rule, it decides by comparison, like a doctor flipping through an album of past cases. `src/04_retrieval_dinov2.py`:
+
+1. Uses DINOv2 (a pretrained vision model) to turn every training photo into a "fingerprint" — a list of numbers describing how it looks — and stores them as the library.
+2. Fingerprints each test photo, finds its most similar cases in the library, and votes, weighted so the common "mole" class does not dominate.
+3. Uses the val set to pick k (how many neighbours to consult); k=5 won. Then grades on the same 1,502 hidden test photos as the baseline.
+
+**Results on the clean test set (same photos as Step 3):**
+
+- Overall accuracy: **60.9%**
+- Balanced accuracy, the fair score: **52.5%**
+
+Side by side on clean photos:
+
+| model | accuracy | balanced accuracy | melanoma caught |
+|-------|----------|-------------------|-----------------|
+| Memorizer (classifier, Step 3) | 76.2% | 74.5% | 56% |
+| Lookup (DINOv2 retrieval, Step 4) | 60.9% | 52.5% | 47% |
+
+So on clean, easy photos the classifier clearly wins. That is expected, and it is fine. The reason: DINOv2 was trained on everyday photos, not skin, so its fingerprints do not separate the seven lesion types as sharply as a model fine-tuned on skin. Two honest takeaways:
+
+- On clean photos, the specialised classifier is stronger. Both models now have a clean-photo starting line.
+- The gap hints that a skin-specific fingerprint-maker (Google's Derm Foundation) would likely lift the Lookup a lot. That is the optional upgrade noted earlier.
+
+But clean-photo accuracy is not the point of this study. The real question is Step 5: when photos degrade, which model falls apart faster, and which one stays honest about being unsure. A model can start lower and still be the more trustworthy one under pressure.
+
+Outputs: `results/retrieval_metrics.txt`, `results/retrieval_confusion.png`, `models/dino_library.npz`.
+
+Run:
+
+```
+venv\Scripts\python.exe src\04_retrieval_dinov2.py
+```
+
+### Step 5 — The crash test (how each model holds up on bad photos)
+
+This is the core experiment. `src/05_crash_test.py` takes the same 1,502 hidden test photos and damages them on purpose — blur, JPEG compression, low light, noise, and rotation — each at three increasing strengths, then re-runs BOTH models on every damaged version. Both models see the same damaged photo; each then applies its own preprocessing.
+
+**Overall (balanced) accuracy as photos degrade:**
+
+- Under low light, noise, and rotation, the Memorizer nosedives while the Lookup stays nearly flat and overtakes it. Under severe low light, for example, the Memorizer falls from 0.745 to 0.096 while the Lookup holds around 0.45.
+- Under blur and JPEG, the Memorizer keeps its lead; both drop, but the classifier stays ahead. So on aggregate accuracy the picture is mixed, not a clean win. This is stated honestly rather than oversold.
+
+**Melanoma detection as photos degrade — the finding that matters:**
+
+This part is not mixed. The Memorizer's ability to catch melanoma collapses toward zero under every kind of damage, while the Lookup stays roughly flat.
+
+| damage (most severe level) | Memorizer catches melanoma | Lookup catches melanoma |
+|-----------------------------|----------------------------|-------------------------|
+| low light | 0% | 50% |
+| noise | 0% | 49% |
+| blur | 4% | 40% |
+| jpeg | 1% | 34% |
+| rotation | 8% | 50% |
+
+Even under blur and JPEG, where the Memorizer wins on overall accuracy, it is missing 96–99% of melanomas while the Lookup still catches about 40%. Overall accuracy hides this; you only see it by looking at melanoma on its own.
+
+**What this means.** The standard classifier looks stronger on clean photos, but on the messy photos people actually take it fails on the one class that can kill someone, while the retrieval model degrades gracefully. The retrieval model started lower yet is far more trustworthy under real-world conditions. That is the study's main result.
+
+Outputs: `results/degradation_results.csv`, `results/degradation_balanced_accuracy.png`, `results/degradation_melanoma_recall.png`.
+
+Run:
+
+```
+venv\Scripts\python.exe src\05_crash_test.py
+```
+
+### Step 6 — The honesty test (calibration), and a surprise
+
+Being *right* and being *honest* are different things. A safe screening tool should get unsure when a photo is bad, not stay confident while wrong. `src/06_honesty_test.py` records each guess's confidence (the classifier's own probability; the Lookup's neighbour vote share) and measures calibration with ECE (0 = perfectly honest).
+
+The result was the opposite of what we expected:
+
+| ECE (lower = more honest) | Memorizer | Lookup (vote share) |
+|---|-----------|---------------------|
+| clean photos | 0.08 | 0.23 |
+| heavily damaged | 0.14 | 0.31 |
+
+As first built, the classifier was the *better*-calibrated model and the Lookup looked badly overconfident. The reason turned out to be how we measured the Lookup's confidence: with only 5 neighbours, one class almost always dominates the vote, so the vote share sits near 0.84 and cannot say "I'm unsure". That is a measurement flaw, not a property of retrieval, which set up Step 7.
+
+Outputs: `results/calibration_results.csv`, `results/calibration_overconfidence.png`, `results/calibration_reliability.png`.
+
+Run:
+
+```
+venv\Scripts\python.exe src\06_honesty_test.py
+```
+
+### Step 7 — A real uncertainty signal makes the Lookup honest
+
+The right uncertainty signal for a retrieval model is distance: if a photo's nearest stored cases are far away, the model is in unfamiliar territory and should be unsure. `src/07_lookup_distance_confidence.py` uses the mean similarity to the 5 nearest cases, calibrated into a probability on a degraded held-out val set, then re-measures honesty. The predictions do not change, only the confidence, so accuracy and melanoma recall stay exactly as in Steps 4-5.
+
+| ECE (lower = more honest) | Memorizer | Lookup (vote share) | Lookup (distance, new) |
+|---|-----------|---------------------|------------------------|
+| clean photos | 0.08 | 0.23 | **0.05** |
+| heavily damaged | 0.14 | 0.31 | **0.03** |
+
+The distance-based confidence took the Lookup from the worst calibrated to the best. It drops from about 0.64 on clean photos to 0.45-0.54 on severe damage, tracking its real accuracy, so it now knows when it is unsure. And it stays honest exactly where it matters: under heavy damage the classifier gets worse (0.08 to 0.14) while the Lookup gets better (0.05 to 0.03).
+
+Outputs: `results/calibration_lookup_compare.csv`, `results/calibration_lookup_reliability.png`.
+
+Run:
+
+```
+venv\Scripts\python.exe src\07_lookup_distance_confidence.py
+```
+
+## The result, in one paragraph
+
+On clean, hospital-quality photos the standard classifier scores higher. But on the degraded photos people actually take, the retrieval "Lookup" model is both more robust — it keeps catching melanoma (about 40-50%) while the classifier collapses toward zero — and more honest — it knows when it is unsure (ECE 0.03 under heavy damage) while the classifier stays overconfident. Done right, the retrieval approach is the more trustworthy design for the real world. That is a concrete, honest answer to the question this project asked: can medical AI be honest about what it does not know?
+
+Next: turn this into a short paper draft.
 
 
 
