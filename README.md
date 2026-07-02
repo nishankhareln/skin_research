@@ -260,7 +260,7 @@ venv\Scripts\python.exe src\07_lookup_distance_confidence.py
 
 On clean, hospital-quality photos the standard classifier scores higher. But on the degraded photos people actually take, the retrieval "Lookup" model is both more robust — it keeps catching melanoma (about 40-50%) while the classifier collapses toward zero — and more honest — it knows when it is unsure (ECE 0.03 under heavy damage) while the classifier stays overconfident. Done right, the retrieval approach is the more trustworthy design for the real world. That is a concrete, honest answer to the question this project asked: can medical AI be honest about what it does not know?
 
-Next: turn this into a short paper draft.
+
 
 
 
