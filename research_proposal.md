@@ -51,18 +51,10 @@ Whatever the outcome, it is a real finding. If retrieval holds up better, that i
 
 Where I live, dermatologists are concentrated in a few cities, and for most people a phone is the only realistic way a skin check would ever happen. Those are exactly the conditions where image quality is worst, so a model that only works on clinical images is not much use to the people who need screening most. A study that takes degradation seriously, and that treats a model knowing its own limits as a first-class goal rather than an afterthought, speaks directly to whether these tools can be trusted outside a hospital.
 
-## Scope and honest limits
+Datasets Information:
+10,015 images, ordinary JPGs, about 600×450 pixels each.
+These are dermatoscopic images. A dermatoscope is a handheld magnifier with its own light that a dermatologist presses against the skin. So every photo is a clean, evenly-lit, zoomed-in close-up of one lesion.
 
-This is a one-week study, so I am keeping it tight on purpose. It is a controlled comparison on a public dataset, not a clinical trial, and the degradations are simulated rather than collected from real patient uploads. The point is not to claim a deployable product. It is to answer one focused question carefully and report it honestly, including the cases where my own hypothesis turns out to be wrong.
+That's important for your project: this data is the "clean hospital" condition. These are not the messy phone photos your study is about — your degradation steps (blur, low light, noise…) simulate phone photos on top of this clean data.
 
-## One-week plan
 
-| Day | Work |
-|-----|------|
-| 1 | Load and split the dataset; train the baseline classifier; record clean accuracy |
-| 2 | Build the embedding and retrieval pipeline; match it to the baseline on clean data |
-| 3 | Implement the degradation suite (five corruption types, three severity levels each) |
-| 4 | Run both models across all degradation levels; log accuracy and confidence |
-| 5 | Calibration analysis and the accuracy-versus-severity curves |
-| 6 | Write the draft: problem, method, results, limits |
-| 7 | Clean the figures and the code repository; finalize the writeup |

@@ -1,0 +1,15 @@
+REAL-WORLD TEST: HAM-trained models on PAD-UFES-20 smartphone photos
+HAM test photos (familiar): 1502   PAD photos (real, unfamiliar): 2106
+
+Accuracy on the real PAD photos (shared classes, no retraining):
+  Memorizer (classifier):  acc=0.290   melanoma recall=0.115
+  Lookup (retrieval):      acc=0.273   melanoma recall=0.404
+  (Low is expected: dermatoscopic-trained models on phone photos is a big shift.)
+
+Does the model KNOW PAD is unfamiliar?  (OOD-detection AUROC, 0.5=clueless, 1.0=perfect)
+  Classifier max-softmax:   AUROC=0.720
+  Retrieval mean-similarity: AUROC=0.937
+
+Average signal, familiar (HAM) vs unfamiliar (PAD):
+  classifier confidence:  HAM=0.832  PAD=0.672
+  retrieval similarity:   HAM=0.888  PAD=0.778

@@ -18,3 +18,6 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Private prep notes — never publish
+answer.md

@@ -4,6 +4,14 @@ When a skin photo is low quality, the kind a real person takes on a phone (blurr
 
 This README is the working book : what has actually been done, in order, so anyone (including me, a month from now) can follow along or reproduce it.
 
+# How this differs from other research
+None of the individual ingredients is new: skin classification, corruption robustness, calibration, and image retrieval have all been studied. The contribution is the combination and two specific findings:
+
+Trust as the target, not accuracy. We measure robustness and calibration together, on the same degraded images, for the dangerous class specifically.
+Aggregate accuracy hides the melanoma collapse. A model can look fine on the headline number while silently failing on the class that matters. We show this directly.
+A retrieval model's honesty under distribution shift depends on its confidence signal. Vote share is miscalibrated; a distance-based, shift-calibrated confidence stays well-calibrated (ECE ≈ 0.03) even under heavy corruption. This is the least-explored point and the sharpest candidate for genuine novelty.
+An honest correction is part of the result. The first confidence signal failed; we diagnosed why and fixed it, rather than reporting only the version that worked.
+
 ## What kind of data this is
 
 We use **HAM10000**, a public collection of dermatoscopic skin-lesion images that doctors have already diagnosed. Because every photo comes with a confirmed answer, we can measure how often a model is right.
@@ -47,7 +55,9 @@ skin_research\
 │   ├── 04_retrieval_dinov2.py    Step 4: the DINOv2 retrieval model
 │   ├── 05_crash_test.py          Step 5: degrade photos, re-run both models
 │   ├── 06_honesty_test.py        Step 6: is the confidence honest (calibration)?
-│   └── 07_lookup_distance_confidence.py  Step 7: distance-based confidence
+│   ├── 07_lookup_distance_confidence.py  Step 7: distance-based confidence
+│   ├── 08_selective_prediction.py  Step 8: refer-when-unsure (honest negative)
+│   └── 09_realworld_pad.py        Step 9: test on real smartphone photos
 ├── models\
 │   ├── baseline_efficientnet_b0.pt   the trained baseline (Step 3)
 │   └── dino_library.npz              train fingerprints (Step 4)
@@ -64,7 +74,11 @@ skin_research\
     ├── calibration_overconfidence.png     Step 6 output: overconfidence curves
     ├── calibration_reliability.png        Step 6 output: reliability diagrams
     ├── calibration_lookup_compare.csv     Step 7 output: the three confidences
-    └── calibration_lookup_reliability.png Step 7 output: honesty comparison
+    ├── calibration_lookup_reliability.png Step 7 output: honesty comparison
+    ├── selective_prediction.csv           Step 8 output: refer-when-unsure
+    ├── selective_prediction.png           Step 8 output: refer-when-unsure curves
+    ├── pad_realworld_metrics.txt          Step 9 output: real-photo scores + OOD
+    └── pad_ood_detection.png              Step 9 output: knows-it-is-unfamiliar
 ```
 
 ---
@@ -256,11 +270,38 @@ Run:
 venv\Scripts\python.exe src\07_lookup_distance_confidence.py
 ```
 
+### Step 8 — Can it refer the hard cases to a doctor? (an honest negative)
+
+`src/08_selective_prediction.py` tests letting each model abstain on its least-confident photos and send them to a human. On overall accuracy this works as expected — referring the unsure cases raises accuracy on the rest. But it did NOT boost melanoma recall for the retrieval model, and the classifier's confidence actually triaged overall accuracy better. The honest lesson: a well-calibrated confidence (Step 7) is not automatically a good ranking signal for which case you are about to get wrong. Kept as a limitation, not a headline.
+
+Outputs: `results/selective_prediction.csv`, `results/selective_prediction.png`.
+
+### Step 9 — The real-world test: real smartphone photos (PAD-UFES-20)
+
+The strongest, most real part of the study. Instead of simulated damage, both HAM-trained models were run — with no retraining — on PAD-UFES-20: 2,106 real smartphone photos of skin lesions (shared classes; details in `datasets.md`). HAM is dermatoscopic; PAD is macroscopic phone photos, so this is a large, genuine real-world shift.
+
+| on real phone photos | Memorizer | Lookup |
+|-----------------------|-----------|--------|
+| melanoma caught | 11.5% | 40.4% |
+| knows the photos are unfamiliar (OOD AUROC) | 0.72 | 0.94 |
+
+1. The retrieval model catches about 3.5x more melanomas on real phone photos (40% vs 11%) — the robustness result survives a real dataset shift, not just simulated corruption.
+2. The retrieval model knows it is out of its depth (AUROC 0.94): its similarity to known cases drops on the unfamiliar photos, while the classifier stays confident on photos it cannot handle (AUROC 0.72) and fails silently. The figure `pad_ood_detection.png` shows the classifier's familiar and unfamiliar curves overlapping, while the retrieval model's separate cleanly.
+
+Honest caveat: overall accuracy is low for both (~28%) — a dermatoscope-trained model on phone photos is a hard shift, and neither is deployable. The wins are the melanoma gap and the self-awareness, not raw accuracy.
+
+Outputs: `results/pad_realworld_metrics.txt`, `results/pad_ood_detection.png`.
+
+Run:
+
+```
+venv\Scripts\python.exe src\09_realworld_pad.py
+```
+
 ## The result, in one paragraph
 
 On clean, hospital-quality photos the standard classifier scores higher. But on the degraded photos people actually take, the retrieval "Lookup" model is both more robust — it keeps catching melanoma (about 40-50%) while the classifier collapses toward zero — and more honest — it knows when it is unsure (ECE 0.03 under heavy damage) while the classifier stays overconfident. Done right, the retrieval approach is the more trustworthy design for the real world. That is a concrete, honest answer to the question this project asked: can medical AI be honest about what it does not know?
 
-Next: turn this into a short paper draft.
 
 
 
