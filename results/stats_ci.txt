@@ -1,0 +1,20 @@
+BOOTSTRAP 95% CONFIDENCE INTERVALS (2000 resamples)
+
+Majority-class baseline (always 'nv'), clean HAM test:
+  accuracy=0.668  balanced=0.143  melanoma recall=0.000
+
+Clean HAM test (in-distribution):
+  Classifier melanoma recall                 0.557  (95% CI 0.479-0.629)
+  Retrieval  melanoma recall                 0.473  (95% CI 0.401-0.551)
+  Classifier balanced accuracy               0.745  (95% CI 0.701-0.787)
+  Retrieval  balanced accuracy               0.525  (95% CI 0.471-0.576)
+
+Real PAD-UFES-20 smartphone photos:
+  Classifier melanoma recall                 0.115  (95% CI 0.038-0.212)
+  Retrieval  melanoma recall                 0.404  (95% CI 0.269-0.538)
+  Classifier accuracy                        0.290  (95% CI 0.270-0.308)
+  Retrieval  accuracy                        0.273  (95% CI 0.254-0.292)
+
+Out-of-distribution detection AUROC (clean HAM vs real PAD):
+  Classifier (max-softmax)                   0.720  (95% CI 0.704-0.738)
+  Retrieval (mean similarity)                0.937  (95% CI 0.929-0.945)
